@@ -5,18 +5,17 @@ import random
 import string
 import os
 import time
+import threading
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
 import smtplib
-import threading
+import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+
 app = Flask(__name__)
 app.secret_key = 'campusconnect_secret_2024'
 
-# ================================
-# UPLOAD CONFIGURATION
-# ================================
 UPLOAD_FOLDER      = 'static/uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 app.config['UPLOAD_FOLDER']      = UPLOAD_FOLDER
@@ -36,18 +35,12 @@ def save_image(file, folder):
         return filename
     return None
 
-# ================================
-# EMAIL CONFIGURATION
-# ================================
 MAIL_SERVER   = 'smtp.gmail.com'
-MAIL_PORT     = 587
+MAIL_PORT     = 465
 MAIL_USERNAME = 'campusconnect.noreplygmail@gmail.com'
 MAIL_PASSWORD = 'fmgginvcvkjipcbk'
 MAIL_FROM     = 'CampusConnect <campusconnect.noreplygmail@gmail.com>'
 
-# ================================
-# HELPER FUNCTIONS
-# ================================
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
@@ -102,7 +95,6 @@ def send_otp_email(to_email, otp, full_name):
         msg['Subject'] = f'CampusConnect - Your OTP is {otp}'
         msg['From']    = MAIL_FROM
         msg['To']      = to_email
-
         text_body = f"""
 CampusConnect - Email Verification
 Hello {full_name},
@@ -134,21 +126,17 @@ This OTP expires in 10 minutes.
         """
         msg.attach(MIMEText(text_body, 'plain'))
         msg.attach(MIMEText(html_body, 'html'))
-
-        # Use SSL on port 465 instead of TLS on 587
-        import smtplib, ssl
         context = ssl.create_default_context()
         with smtplib.SMTP_SSL('smtp.gmail.com', 465, context=context) as server:
             server.login(MAIL_USERNAME, MAIL_PASSWORD)
             server.sendmail(MAIL_USERNAME, to_email, msg.as_string())
-
         print("Email sent successfully!")
         return True
-
     except Exception as e:
         print(f"Email Error: {e}")
         return False
-        def send_otp_email_async(to_email, otp, full_name):
+
+def send_otp_email_async(to_email, otp, full_name):
     thread = threading.Thread(
         target=send_otp_email,
         args=(to_email, otp, full_name)
@@ -156,14 +144,6 @@ This OTP expires in 10 minutes.
     thread.daemon = True
     thread.start()
     return True
-
-def send_welcome_email_async(to_email, full_name):
-    thread = threading.Thread(
-        target=send_welcome_email,
-        args=(to_email, full_name)
-    )
-    thread.daemon = True
-    thread.start()
 
 def send_welcome_email(to_email, full_name):
     try:
@@ -182,20 +162,12 @@ def send_welcome_email(to_email, full_name):
         <div style="padding:30px;">
             <h2>Hello, {full_name}!</h2>
             <p>Your account is verified. You can now access all features!</p>
-            <div style="text-align:center;margin-top:20px;">
-                <a href="https://your-railway-url.up.railway.app/login"
-                   style="background:#4F46E5;color:white;padding:12px 30px;border-radius:8px;text-decoration:none;">
-                    Login Now
-                </a>
-            </div>
         </div>
     </div>
 </body>
 </html>
         """
         msg.attach(MIMEText(html_body, 'html'))
-
-        import smtplib, ssl
         context = ssl.create_default_context()
         with smtplib.SMTP_SSL('smtp.gmail.com', 465, context=context) as server:
             server.login(MAIL_USERNAME, MAIL_PASSWORD)
@@ -205,18 +177,20 @@ def send_welcome_email(to_email, full_name):
         print(f"Welcome email error: {e}")
         return False
 
-# ================================
-# HOME
-# ================================
+def send_welcome_email_async(to_email, full_name):
+    thread = threading.Thread(
+        target=send_welcome_email,
+        args=(to_email, full_name)
+    )
+    thread.daemon = True
+    thread.start()
+
 @app.route('/')
 def home():
     if is_logged_in():
         return redirect(url_for('dashboard'))
     return redirect(url_for('login'))
 
-# ================================
-# REGISTER
-# ================================
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if is_logged_in():
@@ -226,7 +200,6 @@ def register():
         email            = request.form['email'].strip().lower()
         password         = request.form['password']
         confirm_password = request.form['confirm_password']
-
         if not full_name or not email or not password:
             flash('All fields are required!', 'error')
             return render_template('register.html')
@@ -242,7 +215,6 @@ def register():
         if len(password) < 6:
             flash('Password must be at least 6 characters!', 'error')
             return render_template('register.html')
-
         try:
             conn   = get_connection()
             cursor = conn.cursor()
@@ -254,7 +226,6 @@ def register():
                 return render_template('register.html')
             cursor.close()
             conn.close()
-
             otp        = generate_otp()
             otp_expiry = datetime.now() + timedelta(minutes=10)
             session['pending_registration'] = {
@@ -264,97 +235,67 @@ def register():
                 'otp'       : otp,
                 'otp_expiry': otp_expiry.strftime('%Y-%m-%d %H:%M:%S')
             }
-           send_otp_email_async(email, otp, full_name)
-flash(f'OTP sent to {email}! Check your inbox.', 'success')
-return redirect(url_for('verify_otp'))
+            send_otp_email_async(email, otp, full_name)
+            flash(f'OTP sent to {email}! Check your inbox.', 'success')
+            return redirect(url_for('verify_otp'))
         except Exception as e:
             flash(f'Error: {str(e)}', 'error')
     return render_template('register.html')
 
-# ================================
-# VERIFY OTP
-# ================================
 @app.route('/verify-otp', methods=['GET', 'POST'])
 def verify_otp():
     if 'pending_registration' not in session:
         flash('Please register first!', 'error')
         return redirect(url_for('register'))
-
     pending = session['pending_registration']
-
     if request.method == 'POST':
         action = request.form.get('action', 'verify')
-
         if action == 'resend':
             new_otp    = generate_otp()
             new_expiry = datetime.now() + timedelta(minutes=10)
-
             session['pending_registration']['otp']        = new_otp
             session['pending_registration']['otp_expiry'] = new_expiry.strftime('%Y-%m-%d %H:%M:%S')
             session.modified = True
-
             send_otp_email_async(pending['email'], new_otp, pending['full_name'])
-flash('New OTP sent!', 'success')
-
+            flash('New OTP sent!', 'success')
             return render_template('verify_otp.html', email=pending['email'])
-
         entered_otp = request.form.get('otp', '').strip()
         expiry      = datetime.strptime(pending['otp_expiry'], '%Y-%m-%d %H:%M:%S')
-
         if datetime.now() > expiry:
             flash('OTP has expired! Request a new one.', 'error')
             return render_template('verify_otp.html', email=pending['email'])
-
         if entered_otp != pending['otp']:
             flash('Invalid OTP! Please try again.', 'error')
             return render_template('verify_otp.html', email=pending['email'])
-
         try:
             conn   = get_connection()
             cursor = conn.cursor()
-
-            # ✅ INSERT USER (NO ID)
             cursor.execute("""
                 INSERT INTO USERS (full_name, email, password, university)
                 VALUES (:1, :2, :3, 'COMSATS University Islamabad')
             """, (pending['full_name'], pending['email'], pending['password']))
-
             conn.commit()
-
-            # ✅ GET USER ID
             cursor.execute("SELECT user_id FROM USERS WHERE email = :1", (pending['email'],))
             new_user = cursor.fetchone()
-
             if new_user:
-                # ✅ FIXED NOTIFICATION INSERT (NO notif_id)
                 cursor.execute("""
                     INSERT INTO NOTIFICATIONS
                     (user_id, title, message, notif_type)
                     VALUES (:1, :2, :3, 'general')
-                """, (
-                    new_user[0],
-                    'Welcome to CampusConnect!',
-                    'Your account is verified. Start exploring!'
-                ))
-
+                """, (new_user[0],
+                      'Welcome to CampusConnect!',
+                      'Your account is verified. Start exploring!'))
                 conn.commit()
-
             cursor.close()
             conn.close()
-
             send_welcome_email_async(pending['email'], pending['full_name'])
             session.pop('pending_registration', None)
-
             flash('Email verified! Welcome to CampusConnect!', 'success')
             return redirect(url_for('login'))
-
         except Exception as e:
             flash(f'Error: {str(e)}', 'error')
-
     return render_template('verify_otp.html', email=pending['email'])
-# ================================
-# LOGIN
-# ================================
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if is_logged_in():
@@ -386,9 +327,6 @@ def login():
             flash(f'Error: {str(e)}', 'error')
     return render_template('login.html')
 
-# ================================
-# LOGOUT
-# ================================
 @app.route('/logout')
 def logout():
     name = session.get('full_name', '')
@@ -396,9 +334,6 @@ def logout():
     flash(f'Goodbye, {name}! See you soon.', 'success')
     return redirect(url_for('login'))
 
-# ================================
-# DASHBOARD
-# ================================
 @app.route('/dashboard')
 def dashboard():
     if not is_logged_in():
@@ -437,15 +372,15 @@ def dashboard():
             SELECT COUNT(*) FROM MESSAGES
             WHERE receiver_id = :1 AND is_read = 0
         """, (session['user_id'],))
-        unread = cursor.fetchone()[0]
+        unread        = cursor.fetchone()[0]
         cursor.execute("SELECT COUNT(*) FROM RIDES WHERE status='active'")
-        total_rides = cursor.fetchone()[0]
+        total_rides   = cursor.fetchone()[0]
         cursor.execute("SELECT COUNT(*) FROM HOSTELS")
         total_hostels = cursor.fetchone()[0]
         cursor.execute("SELECT COUNT(*) FROM MARKETPLACE WHERE status='available'")
-        total_items = cursor.fetchone()[0]
+        total_items   = cursor.fetchone()[0]
         cursor.execute("SELECT COUNT(*) FROM USERS")
-        total_users = cursor.fetchone()[0]
+        total_users   = cursor.fetchone()[0]
         cursor.close()
         conn.close()
         return render_template('dashboard.html',
@@ -463,9 +398,6 @@ def dashboard():
                              total_hostels=0, total_items=0,
                              total_users=0)
 
-# ================================
-# RIDES
-# ================================
 @app.route('/rides')
 def rides():
     if not is_logged_in():
@@ -628,8 +560,8 @@ def request_ride(ride_id):
         if ride_info:
             cursor.execute("""
                 INSERT INTO NOTIFICATIONS
-                (notif_id, user_id, title, message, notif_type)
-                VALUES (notif_seq.NEXTVAL, :1, :2, :3, 'ride_request')
+                (user_id, title, message, notif_type)
+                VALUES (:1, :2, :3, 'ride_request')
             """, (ride_info[0], 'New Ride Request!',
                   f'{session["full_name"]} requested a seat on your ride.'))
             conn.commit()
@@ -690,9 +622,6 @@ def delete_ride(ride_id):
         flash(f'Error: {str(e)}', 'error')
     return redirect(url_for('profile'))
 
-# ================================
-# HOSTELS
-# ================================
 @app.route('/hostels')
 def hostels():
     if not is_logged_in():
@@ -862,9 +791,6 @@ def delete_hostel(hostel_id):
         flash(f'Error: {str(e)}', 'error')
     return redirect(url_for('profile'))
 
-# ================================
-# MARKETPLACE
-# ================================
 @app.route('/marketplace')
 def marketplace():
     if not is_logged_in():
@@ -932,8 +858,7 @@ def post_item():
         try:
             image_filename = None
             if 'image' in request.files:
-                image_filename = save_image(
-                    request.files['image'], 'marketplace')
+                image_filename = save_image(request.files['image'], 'marketplace')
             conn   = get_connection()
             cursor = conn.cursor()
             cursor.execute("""
@@ -1020,9 +945,6 @@ def report_item(item_id):
         flash(f'Error: {str(e)}', 'error')
     return redirect(url_for('item_detail', item_id=item_id))
 
-# ================================
-# REVIEWS
-# ================================
 @app.route('/reviews/add', methods=['POST'])
 def add_review():
     if not is_logged_in():
@@ -1045,9 +967,6 @@ def add_review():
         flash(f'Error: {str(e)}', 'error')
     return redirect(request.referrer or url_for('dashboard'))
 
-# ================================
-# MESSAGES
-# ================================
 @app.route('/messages')
 def messages():
     if not is_logged_in():
@@ -1110,8 +1029,8 @@ def chat(other_id):
                 """, (session['user_id'], other_id, message))
                 cursor.execute("""
                     INSERT INTO NOTIFICATIONS
-                    (notif_id, user_id, title, message, notif_type)
-                    VALUES (notif_seq.NEXTVAL, :1, :2, :3, 'message')
+                    (user_id, title, message, notif_type)
+                    VALUES (:1, :2, :3, 'message')
                 """, (other_id, 'New Message!',
                       f'You have a new message from {session["full_name"]}'))
                 conn.commit()
@@ -1149,9 +1068,6 @@ def chat(other_id):
         flash(f'Error: {str(e)}', 'error')
         return redirect(url_for('messages'))
 
-# ================================
-# NOTIFICATIONS
-# ================================
 @app.route('/notifications')
 def notifications():
     if not is_logged_in():
@@ -1178,9 +1094,6 @@ def notifications():
         return render_template('notifications.html',
                              notifs=[], unread=0)
 
-# ================================
-# GLOBAL SEARCH
-# ================================
 @app.route('/search')
 def global_search():
     if not is_logged_in():
@@ -1228,9 +1141,6 @@ def global_search():
                          keyword=keyword,
                          unread=get_unread_count())
 
-# ================================
-# PROFILE
-# ================================
 @app.route('/profile')
 def profile():
     if not is_logged_in():
