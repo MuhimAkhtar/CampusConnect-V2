@@ -8,9 +8,9 @@ import time
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
 import smtplib
+import threading
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-
 app = Flask(__name__)
 app.secret_key = 'campusconnect_secret_2024'
 
@@ -148,6 +148,22 @@ This OTP expires in 10 minutes.
     except Exception as e:
         print(f"Email Error: {e}")
         return False
+        def send_otp_email_async(to_email, otp, full_name):
+    thread = threading.Thread(
+        target=send_otp_email,
+        args=(to_email, otp, full_name)
+    )
+    thread.daemon = True
+    thread.start()
+    return True
+
+def send_welcome_email_async(to_email, full_name):
+    thread = threading.Thread(
+        target=send_welcome_email,
+        args=(to_email, full_name)
+    )
+    thread.daemon = True
+    thread.start()
 
 def send_welcome_email(to_email, full_name):
     try:
@@ -248,11 +264,9 @@ def register():
                 'otp'       : otp,
                 'otp_expiry': otp_expiry.strftime('%Y-%m-%d %H:%M:%S')
             }
-            if send_otp_email(email, otp, full_name):
-                flash(f'OTP sent to {email}! Check your inbox.', 'success')
-                return redirect(url_for('verify_otp'))
-            else:
-                flash('Failed to send OTP. Please try again.', 'error')
+           send_otp_email_async(email, otp, full_name)
+flash(f'OTP sent to {email}! Check your inbox.', 'success')
+return redirect(url_for('verify_otp'))
         except Exception as e:
             flash(f'Error: {str(e)}', 'error')
     return render_template('register.html')
@@ -279,10 +293,8 @@ def verify_otp():
             session['pending_registration']['otp_expiry'] = new_expiry.strftime('%Y-%m-%d %H:%M:%S')
             session.modified = True
 
-            if send_otp_email(pending['email'], new_otp, pending['full_name']):
-                flash('New OTP sent!', 'success')
-            else:
-                flash('Failed to resend OTP.', 'error')
+            send_otp_email_async(pending['email'], new_otp, pending['full_name'])
+flash('New OTP sent!', 'success')
 
             return render_template('verify_otp.html', email=pending['email'])
 
@@ -330,7 +342,7 @@ def verify_otp():
             cursor.close()
             conn.close()
 
-            send_welcome_email(pending['email'], pending['full_name'])
+            send_welcome_email_async(pending['email'], pending['full_name'])
             session.pop('pending_registration', None)
 
             flash('Email verified! Welcome to CampusConnect!', 'success')
