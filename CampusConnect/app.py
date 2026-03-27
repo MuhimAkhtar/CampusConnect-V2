@@ -108,42 +108,25 @@ CampusConnect - Email Verification
 Hello {full_name},
 Your OTP verification code is: {otp}
 This OTP expires in 10 minutes.
-Never share this OTP with anyone.
-CampusConnect Team - COMSATS University Islamabad
         """
-
         html_body = f"""
 <!DOCTYPE html>
 <html>
-<head>
-    <style>
-        body {{ font-family: Arial, sans-serif; background:#f4f4f4; }}
-        .container {{ max-width:600px; margin:30px auto; background:white; border-radius:12px; overflow:hidden; }}
-        .header {{ background:linear-gradient(135deg,#4F46E5,#7C3AED); color:white; padding:30px; text-align:center; }}
-        .body {{ padding:40px 30px; text-align:center; }}
-        .otp-box {{ background:#EEF2FF; border:2px dashed #4F46E5; border-radius:12px; padding:25px 40px; margin:20px auto; display:inline-block; }}
-        .otp-code {{ font-size:44px; font-weight:900; color:#4F46E5; letter-spacing:12px; margin:0; font-family:monospace; }}
-        .expiry {{ color:#EF4444; font-weight:bold; margin-top:15px; }}
-        .footer {{ background:#f8f9fa; padding:20px; text-align:center; font-size:12px; color:#888; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
+<body style="font-family:Arial,sans-serif;background:#f4f4f4;">
+    <div style="max-width:600px;margin:30px auto;background:white;border-radius:12px;overflow:hidden;">
+        <div style="background:linear-gradient(135deg,#4F46E5,#7C3AED);color:white;padding:30px;text-align:center;">
             <h1>CampusConnect</h1>
-            <p>COMSATS University Islamabad</p>
         </div>
-        <div class="body">
-            <h2>Hello, {full_name}!</h2>
+        <div style="padding:40px;text-align:center;">
+            <h2>Hello {full_name}!</h2>
             <p>Your OTP verification code:</p>
-            <div class="otp-box">
-                <p class="otp-code">{otp}</p>
+            <div style="background:#EEF2FF;border:2px dashed #4F46E5;border-radius:12px;padding:25px;margin:20px auto;display:inline-block;">
+                <p style="font-size:44px;font-weight:900;color:#4F46E5;letter-spacing:12px;margin:0;font-family:monospace;">{otp}</p>
             </div>
-            <p class="expiry">Expires in 10 minutes</p>
+            <p style="color:#EF4444;font-weight:bold;">Expires in 10 minutes</p>
         </div>
-        <div class="footer">
+        <div style="background:#f8f9fa;padding:20px;text-align:center;font-size:12px;color:#888;">
             <p>Never share this OTP with anyone.</p>
-            <p>2024 CampusConnect - COMSATS University Islamabad</p>
         </div>
     </div>
 </body>
@@ -151,14 +134,17 @@ CampusConnect Team - COMSATS University Islamabad
         """
         msg.attach(MIMEText(text_body, 'plain'))
         msg.attach(MIMEText(html_body, 'html'))
-        server = smtplib.SMTP(MAIL_SERVER, MAIL_PORT, timeout=30)
-        server.ehlo()
-        server.starttls()
-        server.ehlo()
-        server.login(MAIL_USERNAME, MAIL_PASSWORD)
-        server.sendmail(MAIL_USERNAME, to_email, msg.as_string())
-        server.quit()
+
+        # Use SSL on port 465 instead of TLS on 587
+        import smtplib, ssl
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465, context=context) as server:
+            server.login(MAIL_USERNAME, MAIL_PASSWORD)
+            server.sendmail(MAIL_USERNAME, to_email, msg.as_string())
+
+        print("Email sent successfully!")
         return True
+
     except Exception as e:
         print(f"Email Error: {e}")
         return False
@@ -181,7 +167,7 @@ def send_welcome_email(to_email, full_name):
             <h2>Hello, {full_name}!</h2>
             <p>Your account is verified. You can now access all features!</p>
             <div style="text-align:center;margin-top:20px;">
-                <a href="http://127.0.0.1:5000/login"
+                <a href="https://your-railway-url.up.railway.app/login"
                    style="background:#4F46E5;color:white;padding:12px 30px;border-radius:8px;text-decoration:none;">
                     Login Now
                 </a>
@@ -192,11 +178,12 @@ def send_welcome_email(to_email, full_name):
 </html>
         """
         msg.attach(MIMEText(html_body, 'html'))
-        server = smtplib.SMTP(MAIL_SERVER, MAIL_PORT)
-        server.starttls()
-        server.login(MAIL_USERNAME, MAIL_PASSWORD)
-        server.sendmail(MAIL_USERNAME, to_email, msg.as_string())
-        server.quit()
+
+        import smtplib, ssl
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465, context=context) as server:
+            server.login(MAIL_USERNAME, MAIL_PASSWORD)
+            server.sendmail(MAIL_USERNAME, to_email, msg.as_string())
         return True
     except Exception as e:
         print(f"Welcome email error: {e}")
