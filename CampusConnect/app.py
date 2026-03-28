@@ -38,7 +38,7 @@ def save_image(file, folder):
 MAIL_SERVER   = 'smtp.gmail.com'
 MAIL_PORT     = 465
 MAIL_USERNAME = 'campusconnect.noreplygmail@gmail.com'
-MAIL_PASSWORD = 'fmgginvcvkjipcbk'
+MAIL_PASSWORD = 'cbcyfsidpylvjqmm'
 MAIL_FROM     = 'CampusConnect <campusconnect.noreplygmail@gmail.com>'
 
 def hash_password(password):
