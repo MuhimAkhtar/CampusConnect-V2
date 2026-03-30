@@ -976,12 +976,12 @@ def messages():
         cursor = conn.cursor()
         uid    = session['user_id']
         cursor.execute("""
-            SELECT DISTINCT sender_id FROM MESSAGES
-            WHERE receiver_id = :1
-            UNION
-            SELECT DISTINCT receiver_id FROM MESSAGES
-            WHERE sender_id = :2
-        """, (uid, uid))
+    SELECT DISTINCT sender_id FROM MESSAGES
+    WHERE receiver_id = :1
+    UNION
+    SELECT DISTINCT receiver_id FROM MESSAGES
+    WHERE sender_id = :1
+""", (uid,))
         other_ids     = [row[0] for row in cursor.fetchall()]
         conversations = []
         for other_id in other_ids:
@@ -992,10 +992,10 @@ def messages():
             if not user_row:
                 continue
             cursor.execute("""
-                SELECT MAX(created_at) FROM MESSAGES
-                WHERE (sender_id = :1 AND receiver_id = :2)
-                OR (sender_id = :2 AND receiver_id = :1)
-            """, (uid, other_id))
+    SELECT MAX(created_at) FROM MESSAGES
+    WHERE (sender_id = :1 AND receiver_id = :2)
+    OR (sender_id = :3 AND receiver_id = :4)
+""", (uid, other_id, other_id, uid))
             last_time = cursor.fetchone()[0]
             conversations.append((other_id, user_row[0], last_time))
         conversations.sort(
