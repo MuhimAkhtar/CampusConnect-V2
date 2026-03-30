@@ -275,7 +275,8 @@ def verify_otp():
                 VALUES (:1, :2, :3, 'COMSATS University Islamabad')
             """, (pending['full_name'], pending['email'], pending['password']))
             conn.commit()
-            cursor.execute("SELECT user_id FROM USERS WHERE email = :1", (pending['email'],))
+            cursor.execute("SELECT user_id FROM USERS WHERE email = :1",
+                          (pending['email'],))
             new_user = cursor.fetchone()
             if new_user:
                 cursor.execute("""
@@ -976,12 +977,12 @@ def messages():
         cursor = conn.cursor()
         uid    = session['user_id']
         cursor.execute("""
-    SELECT DISTINCT sender_id FROM MESSAGES
-    WHERE receiver_id = :1
-    UNION
-    SELECT DISTINCT receiver_id FROM MESSAGES
-    WHERE sender_id = :1
-""", (uid,))
+            SELECT DISTINCT sender_id FROM MESSAGES
+            WHERE receiver_id = :1
+            UNION
+            SELECT DISTINCT receiver_id FROM MESSAGES
+            WHERE sender_id = :1
+        """, (uid,))
         other_ids     = [row[0] for row in cursor.fetchall()]
         conversations = []
         for other_id in other_ids:
@@ -992,10 +993,10 @@ def messages():
             if not user_row:
                 continue
             cursor.execute("""
-    SELECT MAX(created_at) FROM MESSAGES
-    WHERE (sender_id = :1 AND receiver_id = :2)
-    OR (sender_id = :3 AND receiver_id = :4)
-""", (uid, other_id, other_id, uid))
+                SELECT MAX(created_at) FROM MESSAGES
+                WHERE (sender_id = :1 AND receiver_id = :2)
+                OR (sender_id = :3 AND receiver_id = :4)
+            """, (uid, other_id, other_id, uid))
             last_time = cursor.fetchone()[0]
             conversations.append((other_id, user_row[0], last_time))
         conversations.sort(
@@ -1046,13 +1047,13 @@ def chat(other_id):
             WHERE sender_id = :1 AND receiver_id = :2
         """, (other_id, session['user_id']))
         conn.commit()
-       cursor.execute("""
-    SELECT m.message, m.sender_id, m.created_at, u.full_name
-    FROM MESSAGES m JOIN USERS u ON m.sender_id = u.user_id
-    WHERE (m.sender_id = :1 AND m.receiver_id = :2)
-    OR    (m.sender_id = :3 AND m.receiver_id = :4)
-    ORDER BY m.created_at ASC
-""", (session['user_id'], other_id, other_id, session['user_id']))
+        cursor.execute("""
+            SELECT m.message, m.sender_id, m.created_at, u.full_name
+            FROM MESSAGES m JOIN USERS u ON m.sender_id = u.user_id
+            WHERE (m.sender_id = :1 AND m.receiver_id = :2)
+            OR    (m.sender_id = :3 AND m.receiver_id = :4)
+            ORDER BY m.created_at ASC
+        """, (session['user_id'], other_id, other_id, session['user_id']))
         chats = cursor.fetchall()
         cursor.execute("""
             SELECT full_name, email FROM USERS WHERE user_id = :1
