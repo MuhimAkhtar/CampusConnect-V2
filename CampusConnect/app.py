@@ -1046,13 +1046,13 @@ def chat(other_id):
             WHERE sender_id = :1 AND receiver_id = :2
         """, (other_id, session['user_id']))
         conn.commit()
-        cursor.execute("""
-            SELECT m.message, m.sender_id, m.created_at, u.full_name
-            FROM MESSAGES m JOIN USERS u ON m.sender_id = u.user_id
-            WHERE (m.sender_id = :1 AND m.receiver_id = :2)
-            OR    (m.sender_id = :2 AND m.receiver_id = :1)
-            ORDER BY m.created_at ASC
-        """, (session['user_id'], other_id))
+       cursor.execute("""
+    SELECT m.message, m.sender_id, m.created_at, u.full_name
+    FROM MESSAGES m JOIN USERS u ON m.sender_id = u.user_id
+    WHERE (m.sender_id = :1 AND m.receiver_id = :2)
+    OR    (m.sender_id = :3 AND m.receiver_id = :4)
+    ORDER BY m.created_at ASC
+""", (session['user_id'], other_id, other_id, session['user_id']))
         chats = cursor.fetchall()
         cursor.execute("""
             SELECT full_name, email FROM USERS WHERE user_id = :1
