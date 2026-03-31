@@ -14,7 +14,9 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 app = Flask(__name__)
-app.secret_key = 'campusconnect_secret_2024'
+app.secret_key = os.environ.get(
+    'SECRET_KEY', 'campusconnect_super_secret_2024_xyz'
+)
 
 UPLOAD_FOLDER      = 'static/uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
