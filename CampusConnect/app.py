@@ -255,7 +255,7 @@ def verify_otp():
         if action == 'resend':
             new_otp    = generate_otp()
             new_expiry = datetime.now() + timedelta(minutes=10)
-            session['pending_registration']['otp']        = new_otp
+            session['pending_registration']['otp']         = new_otp
             session['pending_registration']['otp_expiry'] = new_expiry.strftime('%Y-%m-%d %H:%M:%S')
             session.modified = True
             send_otp_email_async(pending['email'], new_otp, pending['full_name'])
@@ -356,8 +356,8 @@ def dashboard():
         rides = cursor.fetchall()
         cursor.execute("""
             SELECT h.hostel_id, h.name, h.location,
-                   h.price, h.gender, h.facilities
-            FROM HOSTELS h
+                   h.price, h.gender, h.facilities, h.contact, u.full_name, h.IMAGE_FILENAME
+            FROM HOSTELS h JOIN USERS u ON h.user_id = u.user_id
             ORDER BY h.created_at DESC
             FETCH FIRST 3 ROWS ONLY
         """)
@@ -637,7 +637,7 @@ def hostels():
         if search and gender:
             cursor.execute("""
                 SELECT h.hostel_id, h.name, h.location, h.price,
-                       h.gender, h.facilities, h.contact, u.full_name
+                       h.gender, h.facilities, h.contact, u.full_name, h.IMAGE_FILENAME
                 FROM HOSTELS h JOIN USERS u ON h.user_id = u.user_id
                 WHERE (LOWER(h.name) LIKE :1
                 OR LOWER(h.location) LIKE :1)
@@ -647,7 +647,7 @@ def hostels():
         elif search:
             cursor.execute("""
                 SELECT h.hostel_id, h.name, h.location, h.price,
-                       h.gender, h.facilities, h.contact, u.full_name
+                       h.gender, h.facilities, h.contact, u.full_name, h.IMAGE_FILENAME
                 FROM HOSTELS h JOIN USERS u ON h.user_id = u.user_id
                 WHERE LOWER(h.name) LIKE :1
                 OR LOWER(h.location) LIKE :1
@@ -656,7 +656,7 @@ def hostels():
         elif gender:
             cursor.execute("""
                 SELECT h.hostel_id, h.name, h.location, h.price,
-                       h.gender, h.facilities, h.contact, u.full_name
+                       h.gender, h.facilities, h.contact, u.full_name, h.IMAGE_FILENAME
                 FROM HOSTELS h JOIN USERS u ON h.user_id = u.user_id
                 WHERE h.gender = :1
                 ORDER BY h.created_at DESC
@@ -664,7 +664,7 @@ def hostels():
         else:
             cursor.execute("""
                 SELECT h.hostel_id, h.name, h.location, h.price,
-                       h.gender, h.facilities, h.contact, u.full_name
+                       h.gender, h.facilities, h.contact, u.full_name, h.IMAGE_FILENAME
                 FROM HOSTELS h JOIN USERS u ON h.user_id = u.user_id
                 ORDER BY h.created_at DESC
             """)
@@ -689,12 +689,14 @@ def post_hostel():
             image_filename = None
             if 'image' in request.files:
                 image_filename = save_image(request.files['image'], 'hostels')
+            
             conn   = get_connection()
             cursor = conn.cursor()
+            
             cursor.execute("""
                 INSERT INTO HOSTELS
-                (user_id, name, location, price, gender, facilities, contact)
-                VALUES (:1, :2, :3, :4, :5, :6, :7)
+                (user_id, name, location, price, gender, facilities, contact, IMAGE_FILENAME)
+                VALUES (:1, :2, :3, :4, :5, :6, :7, :8)
             """, (
                 session['user_id'],
                 request.form['name'],
@@ -702,8 +704,10 @@ def post_hostel():
                 float(request.form['price']),
                 request.form['gender'],
                 request.form['facilities'],
-                request.form['contact']
+                request.form['contact'],
+                image_filename
             ))
+            
             conn.commit()
             cursor.close()
             conn.close()
@@ -723,7 +727,7 @@ def hostel_detail(hostel_id):
         cursor.execute("""
             SELECT h.hostel_id, h.name, h.location, h.price,
                    h.gender, h.facilities, h.contact,
-                   u.full_name, u.email, u.user_id
+                   u.full_name, u.email, u.user_id, h.IMAGE_FILENAME
             FROM HOSTELS h JOIN USERS u ON h.user_id = u.user_id
             WHERE h.hostel_id = :1
         """, (hostel_id,))
@@ -806,7 +810,7 @@ def marketplace():
         if search and category:
             cursor.execute("""
                 SELECT m.item_id, m.title, m.description, m.price,
-                       m.category, m.condition, u.full_name, u.user_id
+                       m.category, m.condition, u.full_name, u.user_id, m.IMAGE_FILENAME
                 FROM MARKETPLACE m JOIN USERS u ON m.user_id = u.user_id
                 WHERE m.status = 'available'
                 AND (LOWER(m.title) LIKE :1
@@ -817,7 +821,7 @@ def marketplace():
         elif search:
             cursor.execute("""
                 SELECT m.item_id, m.title, m.description, m.price,
-                       m.category, m.condition, u.full_name, u.user_id
+                       m.category, m.condition, u.full_name, u.user_id, m.IMAGE_FILENAME
                 FROM MARKETPLACE m JOIN USERS u ON m.user_id = u.user_id
                 WHERE m.status = 'available'
                 AND (LOWER(m.title) LIKE :1
@@ -827,7 +831,7 @@ def marketplace():
         elif category:
             cursor.execute("""
                 SELECT m.item_id, m.title, m.description, m.price,
-                       m.category, m.condition, u.full_name, u.user_id
+                       m.category, m.condition, u.full_name, u.user_id, m.IMAGE_FILENAME
                 FROM MARKETPLACE m JOIN USERS u ON m.user_id = u.user_id
                 WHERE m.status = 'available'
                 AND m.category = :1
@@ -836,7 +840,7 @@ def marketplace():
         else:
             cursor.execute("""
                 SELECT m.item_id, m.title, m.description, m.price,
-                       m.category, m.condition, u.full_name, u.user_id
+                       m.category, m.condition, u.full_name, u.user_id, m.IMAGE_FILENAME
                 FROM MARKETPLACE m JOIN USERS u ON m.user_id = u.user_id
                 WHERE m.status = 'available'
                 ORDER BY m.created_at DESC
@@ -866,15 +870,16 @@ def post_item():
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO MARKETPLACE
-                (user_id, title, description, price, category, condition)
-                VALUES (:1, :2, :3, :4, :5, :6)
+                (user_id, title, description, price, category, condition, IMAGE_FILENAME)
+                VALUES (:1, :2, :3, :4, :5, :6, :7)
             """, (
                 session['user_id'],
                 request.form['title'],
                 request.form['description'],
                 float(request.form['price']),
                 request.form['category'],
-                request.form['condition']
+                request.form['condition'],
+                image_filename
             ))
             conn.commit()
             cursor.close()
@@ -895,7 +900,7 @@ def item_detail(item_id):
         cursor.execute("""
             SELECT m.item_id, m.title, m.description, m.price,
                    m.category, m.condition, m.status,
-                   u.full_name, u.email, u.user_id
+                   u.full_name, u.email, u.user_id, m.IMAGE_FILENAME
             FROM MARKETPLACE m JOIN USERS u ON m.user_id = u.user_id
             WHERE m.item_id = :1
         """, (item_id,))
@@ -1015,60 +1020,78 @@ def messages():
         flash(f'Error: {str(e)}', 'error')
         return render_template('messages.html',
                              conversations=[], unread=0)
-
 @app.route('/messages/<int:other_id>', methods=['GET', 'POST'])
 def chat(other_id):
     if not is_logged_in():
         return redirect(url_for('login'))
+        
+    uid = session.get('user_id') # Safe way to get user_id
+    if not uid:
+        return redirect(url_for('login'))
+
     if request.method == 'POST':
-        message = request.form['message'].strip()
+        message = request.form.get('message', '').strip()
         if message:
             try:
                 conn   = get_connection()
                 cursor = conn.cursor()
+                # 3 values for 3 placeholders (:1, :2, :3)
                 cursor.execute("""
                     INSERT INTO MESSAGES (sender_id, receiver_id, message)
                     VALUES (:1, :2, :3)
-                """, (session['user_id'], other_id, message))
+                """, (uid, other_id, message))
+                
                 cursor.execute("""
                     INSERT INTO NOTIFICATIONS
                     (user_id, title, message, notif_type)
                     VALUES (:1, :2, :3, 'message')
                 """, (other_id, 'New Message!',
-                      f'You have a new message from {session["full_name"]}'))
+                      f'You have a new message from {session.get("full_name")}'))
                 conn.commit()
                 cursor.close()
                 conn.close()
             except Exception as e:
+                print(f"Chat POST Error: {e}") # Debugging ke liye
                 flash(f'Error: {str(e)}', 'error')
+
     try:
         conn   = get_connection()
         cursor = conn.cursor()
+        
+        # FIX: Ensure both positional binds are strictly provided
+        # 2 values for :1 and :2
         cursor.execute("""
             UPDATE MESSAGES SET is_read = 1
             WHERE sender_id = :1 AND receiver_id = :2
-        """, (other_id, session['user_id']))
+        """, (other_id, uid))
         conn.commit()
+
+        # 4 values for 4 placeholders
         cursor.execute("""
             SELECT m.message, m.sender_id, m.created_at, u.full_name
             FROM MESSAGES m JOIN USERS u ON m.sender_id = u.user_id
             WHERE (m.sender_id = :1 AND m.receiver_id = :2)
             OR    (m.sender_id = :3 AND m.receiver_id = :4)
             ORDER BY m.created_at ASC
-        """, (session['user_id'], other_id, other_id, session['user_id']))
+        """, (uid, other_id, other_id, uid))
+        
         chats = cursor.fetchall()
+        
         cursor.execute("""
             SELECT full_name, email FROM USERS WHERE user_id = :1
         """, (other_id,))
         other_user = cursor.fetchone()
-        unread     = get_unread_count()
+        
+        unread = get_unread_count()
         cursor.close()
         conn.close()
+        
         return render_template('chat.html',
                              chats=chats, other_user=other_user,
                              other_id=other_id, unread=unread)
     except Exception as e:
-        flash(f'Error: {str(e)}', 'error')
+        print(f"Chat GET Error: {e}") # Debugging
+        flash(f'Error identifying conversation. Please try again.', 'error')
         return redirect(url_for('messages'))
 
 @app.route('/notifications')
